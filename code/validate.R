@@ -1,5 +1,5 @@
 # return basic validation metrics for Supervised models
-validate = function(predicted, groundtruth, class_names = NULL, verbose=TRUE, filename=NULL) {
+validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_points = 100, verbose=TRUE, plot_graph=TRUE, filename=NULL) {
      
      # check is the input is a probability matrix
      if (is.matrix(predicted)) {
@@ -7,9 +7,62 @@ validate = function(predicted, groundtruth, class_names = NULL, verbose=TRUE, fi
           predicted = apply(predicted, 1, function(x) class_names[which.max(x)] );
      };
      
-     # ERROR CHECK
+     # length check
      n = length(predicted);
      if (n != length(groundtruth)) stop("Number of points in predicted is different than in groundtruth.");
+     auc = NULL;
+     
+     # check if the input is a probability vector
+     if (!all(predicted == floor(predicted))) { # if TRUE we assume binary classification
+          
+          # calculate AUC 
+          ranked_prediction = rank(predicted);
+          index = groundtruth==1; np = sum(index);
+          auc = (sum(ranked_prediction[index]) - np*(np+1)/2)/np/(n-np);
+          
+          # plot ROC: sensitivity = recall = true positive rate = TP/(TP+FN)
+          # number of points on the plot
+          n_plot_points = min(n, n_points+2);
+          
+          # sort predicted probability
+          sort_res = sort(predicted, index.return=TRUE);
+          prob = predicted[sort_res$ix];
+          ground = groundtruth[sort_res$ix];
+          
+          # for eah point - threshold value
+          position_index = floor(seq.int(from = 1, to = n, length.out = n_plot_points));
+          sensitivity = rep(0, n_plot_points); specificity = rep(0, n_plot_points); predicted_np = rep(0, n_plot_points);
+          for (i in 2:n_plot_points) {
+               i_th = prob[position_index[i]];
+               # everything > i_th is 1
+               tp = sum(ground[position_index[i]:n]==1);
+               fn = sum(ground[1:(position_index[i]-1)]==1);
+               tn = sum(ground[1:(position_index[i]-1)]==0);
+               fp = sum(ground[position_index[i]:n]==0);
+               sensitivity[i] = tp/(tp+fn);
+               specificity[i] = tn/(tn+fp);
+               
+               # number of predicted positive records
+               predicted_np[i] = n-position_index[i]+1;
+          };          
+          # boundary conditions
+          sensitivity[1] = 1;
+          specificity[n_plot_points] = 1;
+          
+          # do actual plot
+          if (plot_graph) {
+               plot(1-specificity, sensitivity, type="l", col="red");
+               lines(x=c(0, 1), y=c(0, 1), lty=2);
+          };
+                
+          # find optimal threshold (approximately)
+          if (is.null(th)) th = prob[position_index[which.min(abs(np/n - predicted_np/n))]];
+          
+          # convert to predictions
+          prob = rep(0, n);
+          prob[predicted>=th] = 1;
+          predicted = prob;
+     };
      
      # confusion matrix
      tt = table(predicted, groundtruth);
@@ -79,21 +132,33 @@ validate = function(predicted, groundtruth, class_names = NULL, verbose=TRUE, fi
      
      # prepare the output
      df = data.frame(classes, accuracy, precision, recall, f_measure, predicted_dist/n, groundtruth_dist/n, predicted_dist, groundtruth_dist,
-                     (groundtruth_dist-predicted_dist)/groundtruth_dist );
+                     (groundtruth_dist-predicted_dist)/groundtruth_dist, precision/(groundtruth_dist/n) );
      names(df) = c('Class', 'Accuracy', 'Precision', 'Recall', 'F-measure', 'Predicted Distribution', 'Groundtruth Distribution', 
-                   '# Predicted', '# Groundtruth', 'Distribution Delta');
+                   '# Predicted', '# Groundtruth', 'Distribution Delta', 'Gain');
      rownames(df) = NULL;
-     res = list("df" = df, "avg_f_measure" = mean(f_measure), "w_f_measure" = w_f_measure);
+     if (!is.null(auc)) {
+          df = cbind(df, rep(auc, k)); 
+          names(df) = c('Class', 'Accuracy', 'Precision', 'Recall', 'F-measure', 'Predicted Distribution', 'Groundtruth Distribution', 
+                        '# Predicted', '# Groundtruth', 'Distribution Delta', 'Gain', 'AUC');
+     };
      
+     res = list("df" = df, "avg_f_measure" = mean(f_measure), "w_f_measure" = w_f_measure, 
+                "auc" = auc, "sensitivity" = sensitivity, "specificity" = specificity, "th" = th);
+          
      # output
      if (verbose) {
           message('Validation is done base on ', n, ' samples:');
           print(res$df);
           message('Average F-measure: ', res$avg_f_measure, ' (weigthed: ',res$w_f_measure, ')');
+          if (!is.null(auc)) message('AUC: ', auc);
      };
      
      # save output as csv file
-     if (!is.null(filename)) write.table(res$df, file=filename, row.names=FALSE, sep=",");
+     if (!is.null(filename)) {
+          if (basename(filename) == filename) filename = paste0(getwd(), "/", filename);
+          message('Saving results in ' ,filename, '..');
+          write.table(res$df, file=filename, row.names=FALSE, sep=",");
+     };
      
      return(res);
 }
