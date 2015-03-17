@@ -13,4 +13,5 @@ If you want more details about the suite then ckecout the [site](https://code.go
     * Supports probability matrix (the class with the highest proabliry always wins) or probability vector (for binary models) or vector of predicted values
     * For binary models computes AUC, plots ROC curve, and finds an optimal threshold so that the predicted distribution as close as possible to the actual distribution
     * Can save results to CSV file
+* `code/generateSVMFiles.R` given character array of data in SVM lite format and array of labels, function creates one file per class and returns character array of filenames.
 * `test/test_doSVM.R` gives you a simple example how to use the wrapper. As a dataset I used [IRIS dataset](https://archive.ics.uci.edu/ml/datasets/Iris), see UCI Machine Learning Repository for details.
