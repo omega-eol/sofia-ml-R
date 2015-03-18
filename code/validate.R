@@ -10,10 +10,15 @@ validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_poi
      # length check
      n = length(predicted);
      if (n != length(groundtruth)) stop("Number of points in predicted is different than in groundtruth.");
-     auc = NULL;
+     auc = NULL; auc_pr = NULL;
      
      # check if the input is a probability vector
-     if (!all(predicted == floor(predicted))) { # if TRUE we assume binary classification
+     if (!all(predicted == floor(predicted))) { # if TRUE we assume a binary classification problem
+          
+          # calculate AUC of Precision - Recall curve
+          library(PRROC);
+          auc_pr = pr.curve(scores.class0=predicted, weights.class0=groundtruth, curve=plot_graph);
+          if (plot_graph) plot(auc_pr);
           
           # calculate AUC 
           ranked_prediction = rank(predicted);
@@ -51,7 +56,7 @@ validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_poi
           
           # do actual plot
           if (plot_graph) {
-               plot(1-specificity, sensitivity, type="l", col="red");
+               plot(1-specificity, sensitivity, type="l", col="red", main=paste0("ROC curve\nAUC = ", sprintf("%8.7f", auc)));
                lines(x=c(0, 1), y=c(0, 1), lty=2);
           };
                 
@@ -136,27 +141,28 @@ validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_poi
      names(df) = c('Class', 'Accuracy', 'Precision', 'Recall', 'F-measure', 'Predicted Distribution', 'Groundtruth Distribution', 
                    '# Predicted', '# Groundtruth', 'Distribution Delta', 'Gain');
      rownames(df) = NULL;
-     if (!is.null(auc)) {
-          df = cbind(df, rep(auc, k)); 
+     if (!is.null(auc)) { # if TRUE then auc_pr is also not null
+          df = cbind(df, rep(auc, k), rep(auc_pr$auc.davis.goadrich, k)); 
           names(df) = c('Class', 'Accuracy', 'Precision', 'Recall', 'F-measure', 'Predicted Distribution', 'Groundtruth Distribution', 
-                        '# Predicted', '# Groundtruth', 'Distribution Delta', 'Gain', 'AUC');
+                        '# Predicted', '# Groundtruth', 'Distribution Delta', 'Gain', 'AUC', 'AUC-PR');
      };
      
      res = list("df" = df, "avg_f_measure" = mean(f_measure), "w_f_measure" = w_f_measure, 
-                "auc" = auc, "sensitivity" = sensitivity, "specificity" = specificity, "th" = th);
+                "auc" = auc, "auc_pr" = auc_pr, "sensitivity" = sensitivity, "specificity" = specificity, "th" = th);
           
      # output
      if (verbose) {
           message('Validation is done base on ', n, ' samples:');
           print(res$df);
           message('Average F-measure: ', res$avg_f_measure, ' (weigthed: ',res$w_f_measure, ')');
-          if (!is.null(auc)) message('AUC: ', auc);
+          if (!is.null(auc)) message('AUC: ', auc, ', AUC-PR: ', auc_pr$auc.davis.goadrich);
      };
      
      # save output as csv file
      if (!is.null(filename)) {
           if (basename(filename) == filename) filename = paste0(getwd(), "/", filename);
           message('Saving results in ' ,filename, '..');
+          dir.create(dirname(filename), showWarnings = FALSE, recursive = TRUE);
           write.table(res$df, file=filename, row.names=FALSE, sep=",");
      };
      
