@@ -6,15 +6,15 @@
 # if folder_path is null, then folder_path - current working directory
 # 
 # function returns array of file names, one file per class.
-generateSVMFiles = function(svm_lite_data, labels, folder_path=NULL) {
+generateSVMFiles = function(svm_lite_data, labels, classes=NULL, folder_path=NULL, replace=TRUE) {
 
      # folder path where files will be save
      if (is.null(folder_path)) folder_path = getwd();
           
      # intialization
      n = length(labels);
-     if (n != length(svm_lite_data)) stop('Number of records on labels is different that in svm_lite_data.');     
-     classes = sort(unique(labels));
+     if (n != length(svm_lite_data)) stop('Number of records in labels is different that in svm_lite_data.');     
+     if (is.null(classes)) classes = sort(unique(labels));
      k = length(classes);   
      dir.create(folder_path, recursive = TRUE, showWarnings = FALSE);
      
@@ -23,9 +23,20 @@ generateSVMFiles = function(svm_lite_data, labels, folder_path=NULL) {
      for (i in 1:k) {
           class_name = classes[i];
           filenames[i] = paste0(folder_path, "/svm_", class_name, ".csv");
-          temp = rep(-1, n);
-          temp[labels==class_name] = 1;
-          write(paste(temp, svm_lite_data), file=filenames[i]);
+          
+          # if file already exists and raplce is FALSE then skip it!
+          if (file.exists(filenames[i])&&!replace) {
+               message(filenames[i], ' already exists. Skipping it!');
+          } else {
+               temp = rep(-1, n);
+               ind = labels==class_name;
+                         
+               # check wheter we have at least one positive sample 
+               if (!any(ind)) stop('Dataset does not have positive samples.');
+               
+               temp[ind] = 1;
+               write(paste(temp, svm_lite_data), file=filenames[i]);
+          };
      }; # end for each class - j
      
      return(filenames); 

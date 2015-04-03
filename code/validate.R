@@ -1,5 +1,5 @@
 # return basic validation metrics for Supervised models
-validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_points = 100, verbose=TRUE, plot_graph=TRUE, filename=NULL) {
+validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_points = 100, verbose=TRUE, plot_graph=TRUE, filename=NULL, compute_auc_pr=TRUE) {
      
      # check is the input is a probability matrix
      if (is.matrix(predicted)) {
@@ -16,9 +16,13 @@ validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_poi
      if (!all(predicted == floor(predicted))) { # if TRUE we assume a binary classification problem
           
           # calculate AUC of Precision - Recall curve
-          library(PRROC);
-          auc_pr = pr.curve(scores.class0=predicted, weights.class0=groundtruth, curve=plot_graph);
-          if (plot_graph) plot(auc_pr);
+          if (compute_auc_pr) {
+               library(PRROC);
+               auc_pr = pr.curve(scores.class0=predicted, weights.class0=groundtruth, curve=plot_graph);
+               if (plot_graph) plot(auc_pr);
+          } else {
+               auc_pr = list(auc.davis.goadrich = 0);
+          };
           
           # calculate AUC 
           ranked_prediction = rank(predicted);
