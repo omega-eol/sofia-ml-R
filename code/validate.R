@@ -17,8 +17,13 @@ validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_poi
           
           # calculate AUC of Precision - Recall curve
           if (compute_auc_pr) {
-               library(PRROC);
-               auc_pr = pr.curve(scores.class0=predicted, weights.class0=groundtruth, curve=plot_graph);
+               library(PRROC);               
+               auc_pr = tryCatch({
+                    pr.curve(scores.class0=predicted, weights.class0=groundtruth, curve=plot_graph);          
+               }, error = function(err) {
+                    message(err);
+                    return(list(auc.davis.goadrich = 0));
+               });
                if (plot_graph) plot(auc_pr);
           } else {
                auc_pr = list(auc.davis.goadrich = 0);
