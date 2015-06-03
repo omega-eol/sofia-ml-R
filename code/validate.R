@@ -3,23 +3,27 @@ validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_poi
      
      # check is the input is a probability matrix
      if (is.matrix(predicted)) {
-          if (is.null(class_names)) stop('Class names is not specified');
-          predicted = apply(predicted, 1, function(x) class_names[which.max(x)] );
+          #if (is.null(class_names)) stop('Class names is not specified');
+          #predicted = apply(predicted, 1, function(x) class_names[which.max(x)] );
+          predicted = apply(predicted, 1, function(x) which.max(x) );
      };
      
      # length check
      n = length(predicted);
      if (n != length(groundtruth)) stop("Number of points in predicted is different than in groundtruth.");
      auc = NULL; auc_pr = NULL;
+     sensitivity = NULL; specificity = NULL;
      
      # check if the input is a probability vector
      if (!all(predicted == floor(predicted))) { # if TRUE we assume a binary classification problem
           
           # calculate AUC of Precision - Recall curve
           if (compute_auc_pr) {
-               library(PRROC);               
+               library(PRROC);
+               y = groundtruth;
+               if (is.factor(groundtruth)) y = as.numeric(levels(groundtruth))[groundtruth]
                auc_pr = tryCatch({
-                    pr.curve(scores.class0=predicted, weights.class0=groundtruth, curve=plot_graph);          
+                    pr.curve(scores.class0=predicted, weights.class0=y, curve=plot_graph);          
                }, error = function(err) {
                     message(err);
                     return(list(auc.davis.goadrich = 0));
@@ -65,7 +69,8 @@ validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_poi
           
           # do actual plot
           if (plot_graph) {
-               plot(1-specificity, sensitivity, type="l", col="red", main=paste0("ROC curve\nAUC = ", sprintf("%8.7f", auc)));
+               plot(1-specificity, sensitivity, type="l", col="red", xlim=c(0,1), ylim=c(0,1),
+                    main=paste0("ROC curve\nAUC = ", sprintf("%8.7f", auc)));
                lines(x=c(0, 1), y=c(0, 1), lty=2);
           };
                 
@@ -83,8 +88,10 @@ validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_poi
      
      # find number of classes on actual data
      q = dimnames(tt); classes = q$groundtruth; k = length(classes);
-     if (k != length(q$predicted) | length(setdiff(q$predicted, q$groundtruth)) != 0) {
+     missing_classes = setdiff(union(q$predicted, q$groundtruth), intersect(q$predicted, q$groundtruth));
+     if (k != length(q$predicted) | length(missing_classes) != 0) {
           warning("Number of predicted classes is different than number of classes in groundtruth data.");
+          message('Different classes detected:'); print(missing_classes);
           
           # this makes everything a little bit complicated
           classes = sort(union(q$predicted, q$groundtruth));
@@ -156,6 +163,14 @@ validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_poi
                         '# Predicted', '# Groundtruth', 'Distribution Delta', 'Gain', 'AUC', 'AUC-PR');
      };
      
+     # if class_name vector is not null replace class names in Class column in final data frame
+     if (!is.null(class_names)) {
+          message('Renaming class names..');
+          f = as.numeric(levels(df$Class))[df$Class];
+          df$Class = class_names[f];
+          df = df[order(df$Class),]
+     };
+     
      res = list("df" = df, "avg_f_measure" = mean(f_measure), "w_f_measure" = w_f_measure, 
                 "auc" = auc, "auc_pr" = auc_pr, "sensitivity" = sensitivity, "specificity" = specificity, "th" = th);
           
@@ -164,6 +179,7 @@ validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_poi
           message('Validation is done base on ', n, ' samples:');
           print(res$df);
           message('Average F-measure: ', res$avg_f_measure, ' (weigthed: ',res$w_f_measure, ')');
+          message('Average Delta Distribution: ', mean(abs((groundtruth_dist-predicted_dist)/groundtruth_dist)), '.');
           if (!is.null(auc)) message('AUC: ', auc, ', AUC-PR: ', auc_pr$auc.davis.goadrich);
      };
      
@@ -176,4 +192,33 @@ validate = function(predicted, groundtruth, class_names = NULL, th = NULL, n_poi
      };
      
      return(res);
-}
+};
+
+
+# finds accuracy for the top K
+# mat - matrix of probabilities
+# groundtruth - vector of ground-truth
+# k - number of top values
+topK = function(mat, groundtruth, k=5, plot_values=FALSE) {
+     n = nrow(mat);     
+     if (n != length(groundtruth)) stop('Probability matrix has different number of rows than the ground-truth vector.');
+     
+     k_stats = matrix(0, ncol=k, nrow=n);
+     for (i in 1:n) {
+          top_values = as.numeric(names(sort(mat[i,], decreasing = TRUE)))[1:k];
+          k_stats[i,] = top_values == groundtruth[i];
+     };
+     
+     # find top k
+     top_k = rep(0, k);
+     for (i in 1:k) top_k[i] = sum(k_stats[,(1:i)])/n;
+     
+     # plot values in needed
+     if (plot_values) {
+          plot(top_k, type='b', main=paste0('Accuracy for top ', k ,'.'),
+               xlab='k', ylab='Accuracy');
+     };
+     
+     return(top_k);
+};
+

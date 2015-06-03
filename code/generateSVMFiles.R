@@ -18,26 +18,55 @@ generateSVMFiles = function(svm_lite_data, labels, classes=NULL, folder_path=NUL
      k = length(classes);   
      dir.create(folder_path, recursive = TRUE, showWarnings = FALSE);
      
-     # for each class we generate a separete train and test data file in SVM lite format
-     filenames = character(k);
-     for (i in 1:k) {
-          class_name = classes[i];
-          filenames[i] = paste0(folder_path, "/svm_", class_name, ".csv");
+     # run
+     if (k > 2) {          
+          # multi-class case: one-vs-all
           
-          # if file already exists and raplce is FALSE then skip it!
-          if (file.exists(filenames[i])&&!replace) {
-               message(filenames[i], ' already exists. Skipping it!');
-          } else {
-               temp = rep(-1, n);
-               ind = labels==class_name;
-                         
-               # check wheter we have at least one positive sample 
-               if (!any(ind)) stop('Dataset does not have positive samples.');
+          # initialization
+          filenames = character(k);
+          
+          # for each class we generate a separete file in SVM lite format
+          for (i in 1:k) {
+               class_name = classes[i];
+               filenames[i] = paste0(folder_path, "/svm_", class_name, ".csv");
                
-               temp[ind] = 1;
-               write(paste(temp, svm_lite_data), file=filenames[i]);
-          };
-     }; # end for each class - j
+               # if file already exists and raplce is FALSE then skip it!
+               if (file.exists(filenames[i])&&!replace) {
+                    message(filenames[i], ' already exists. Skipping it!');
+               } else {
+                    temp = rep(-1, n);
+                    ind = labels==class_name;
+                    
+                    # check wheter we have at least one positive sample 
+                    if (!any(ind)) stop('Dataset does not have positive samples.');
+                    
+                    temp[ind] = 1;
+                    write(paste(temp, svm_lite_data), file=filenames[i]);
+               };
+          }; # end for each class - j
+          
+     } else if (k==2) { 
+          # this is binary case
+          
+          # set filename
+          class_name = classes[1];
+          filenames = paste0(folder_path, "/svm_", class_name, "_vs_", classes[2], ".csv");
+          
+          # prepare labels
+          temp = rep(-1, n);
+          ind = labels==class_name;
+          
+          # check wheter we have at least one positive sample 
+          if (!any(ind)) stop('Dataset does not have positive samples.');
+          
+          temp[ind] = 1;
+          
+          # write data as text file
+          write(paste(temp, svm_lite_data), file=filenames);
+          
+     } else {
+          stop('Only one class found.')
+     };
      
      return(filenames); 
 };
